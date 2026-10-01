@@ -72,8 +72,8 @@ export default function Home(): ReactNode {
         </section>
         <section className={styles.creator}>
           <div className="container">
-            <div className="creator-card">
-              <img src="https://avatars.githubusercontent.com/u/25437144?v=4" alt="Thiago Egon Lange" />
+            <div className={styles.creatorCard}>
+              <img className={styles.creatorAvatar} src="https://avatars.githubusercontent.com/u/25437144?v=4" alt="Thiago Egon Lange" />
               <div>
                 <p className={styles.eyebrow}>CREATED BY</p>
                 <h2>Thiago Egon Lange</h2>

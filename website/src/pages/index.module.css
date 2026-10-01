@@ -66,7 +66,7 @@
   padding: 4rem 0 5rem;
 }
 
-.creator-card {
+.creatorCard {
   display: flex;
   align-items: center;
   gap: 1.5rem;
@@ -78,19 +78,19 @@
   background: var(--ifm-background-surface-color);
 }
 
-.creator-card img {
-  width: 24px;
-  height: 24px;
+.creatorAvatar {
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
 }
 
-.creator-card h2,
-.creator-card p {
+.creatorCard h2,
+.creatorCard p {
   margin-bottom: 0.5rem;
 }
 
 @media screen and (max-width: 600px) {
-  .creator-card {
+  .creatorCard {
     align-items: flex-start;
     flex-direction: column;
   }
