@@ -12,6 +12,7 @@ function HomepageHeader() {
   return (
     <header className={clsx('hero hero--primary', styles.heroBanner)}>
       <div className="container">
+        <img className={styles.brandLogo} src="img/nexusflow-logo.png" alt="NexusFlow — Data Pipelines & Streaming" />
         <p className={styles.eyebrow}>OPEN-SOURCE DATA PLATFORM</p>
         <Heading as="h1" className="hero__title">Build reliable data flows with NexusFlow</Heading>
         <p className="hero__subtitle">{siteConfig.tagline}</p>

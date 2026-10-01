@@ -78,6 +78,10 @@ const config: Config = {
     },
     navbar: {
       title: 'NexusFlow',
+      logo: {
+        alt: 'NexusFlow logo',
+        src: 'img/nexusflow-logo.png',
+      },
       items: [
         {
           type: 'docSidebar',
