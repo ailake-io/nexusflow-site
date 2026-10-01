@@ -1,0 +1,45 @@
+---
+sidebar_position: 1
+title: Installation
+---
+
+# Installation
+
+NexusFlow can run as a published Docker image, a release binary, or a local Rust build. Docker is the recommended way to evaluate the platform.
+
+## Docker
+
+```bash
+docker volume create nexusflow_data
+docker run --rm -v nexusflow_data:/data alpine chown -R 1001:1001 /data
+
+docker run -d --name nexusflow -p 8080:8080 \
+  -e NEXUS_JWT_SECRET="$(openssl rand -hex 32)" \
+  -e NEXUS_ENCRYPTION_KEY="$(openssl rand -hex 32)" \
+  -e NEXUS_ADMIN_USERNAME=admin \
+  -e NEXUS_ADMIN_PASSWORD=change-this-password \
+  -e NEXUS_CHECKPOINT_DB=sqlite:///data/nexusflow.db \
+  -e NEXUS_AUTH_DB=sqlite:///data/nexusflow-auth.db \
+  -e NEXUS_PIPELINES_DB=sqlite:///data/nexusflow-pipelines.db \
+  -v nexusflow_data:/data \
+  thiagolange/nexusflow:latest
+```
+
+Open [http://localhost:8080](http://localhost:8080) and sign in with the administrator credentials.
+
+:::warning
+Change the administrator password and keep the JWT and encryption secrets private. The volume ownership step is required because the container runs as a non-root user.
+:::
+
+## Release binaries
+
+Linux installers, Windows MSI packages, and the macOS Apple Silicon archive are published on the [GitHub Releases page](https://github.com/ailake-io/nexusflow/releases).
+
+## Build from source
+
+For development, install Rust and run:
+
+```bash
+cargo build --release -p nexusflow --features embed-ui,connectors-all
+./target/release/nexusflow
+```

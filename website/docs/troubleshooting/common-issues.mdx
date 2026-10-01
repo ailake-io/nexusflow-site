@@ -1,0 +1,22 @@
+---
+sidebar_position: 1
+title: Common issues
+---
+
+# Common issues
+
+## Container exits with a database error
+
+Make sure `/data` is mounted and writable by the container user. Run the volume ownership command from the [installation guide](../getting-started/installation) before starting the container.
+
+## A connector cannot load its driver
+
+Some connectors require a native ADBC or vendor driver. Install the driver on the host or image and set the corresponding `ADBC_DRIVER_*_PATH` or ODBC configuration.
+
+## A pipeline stops after a restart
+
+Confirm that the checkpoint database points to persistent storage. A container without a persistent volume starts with an empty state and cannot resume previous runs.
+
+## Need help
+
+Search existing [GitHub issues](https://github.com/ailake-io/nexusflow/issues), check the [full user guide](https://github.com/ailake-io/nexusflow/blob/main/docs/USER_GUIDE.md), or open a new issue with the version, deployment method, connector, and sanitized logs.

@@ -1,0 +1,32 @@
+---
+sidebar_position: 2
+title: Docker deployment
+---
+
+# Docker deployment
+
+The public image is `thiagolange/nexusflow:latest`. Persist `/data` and configure the three metadata databases explicitly so the container can restart without losing state.
+
+```yaml
+services:
+  nexusflow:
+    image: thiagolange/nexusflow:latest
+    ports:
+      - "8080:8080"
+    environment:
+      NEXUS_JWT_SECRET: ${NEXUS_JWT_SECRET}
+      NEXUS_ENCRYPTION_KEY: ${NEXUS_ENCRYPTION_KEY}
+      NEXUS_ADMIN_USERNAME: admin
+      NEXUS_ADMIN_PASSWORD: ${NEXUS_ADMIN_PASSWORD}
+      NEXUS_CHECKPOINT_DB: sqlite:///data/nexusflow.db
+      NEXUS_AUTH_DB: sqlite:///data/nexusflow-auth.db
+      NEXUS_PIPELINES_DB: sqlite:///data/nexusflow-pipelines.db
+    volumes:
+      - nexusflow_data:/data
+    restart: unless-stopped
+
+volumes:
+  nexusflow_data:
+```
+
+For multiple replicas, replace the SQLite URLs with PostgreSQL URLs and deploy behind a load balancer. Kubernetes manifests and production notes are maintained in the main repository.

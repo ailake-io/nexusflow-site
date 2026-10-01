@@ -1,0 +1,43 @@
+---
+sidebar_position: 2
+title: Quickstart
+---
+
+# Quickstart
+
+After starting NexusFlow, open the web UI at `http://localhost:8080`, authenticate, and create a pipeline with a source, optional transform, and one or more sinks.
+
+## Pipeline shape
+
+```text
+source(s) -> transform (optional) -> sink(s)
+```
+
+A minimal cross-connector pipeline can look like this:
+
+```json
+{
+  "pipeline_id": "pg-to-sqlite",
+  "sources": [{"connector": "postgres", "config": {"uri": "postgresql://user:password@host/database", "table": "events", "primary_key": "id"}}],
+  "transform": {"sql": "SELECT * FROM source0"},
+  "sinks": [{"connector": "sqlite", "config": {"uri": "/data/output.db", "table": "events", "primary_key": "id"}}]
+}
+```
+
+## API flow
+
+The UI uses the same REST API, so pipelines can be automated:
+
+```bash
+curl -X POST http://localhost:8080/pipelines \
+  -H "authorization: Bearer $TOKEN" \
+  -H 'content-type: application/json' \
+  -d @pipeline.json
+
+curl -X POST http://localhost:8080/pipelines/pg-to-sqlite/run \
+  -H "authorization: Bearer $TOKEN" \
+  -H 'content-type: application/json' \
+  -d '{"pipeline_id":"pg-to-sqlite"}'
+```
+
+The run endpoint returns a run identifier. Use the pipeline run endpoints or WebSocket progress to follow execution.

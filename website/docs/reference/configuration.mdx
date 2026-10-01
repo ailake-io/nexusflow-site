@@ -1,0 +1,26 @@
+---
+sidebar_position: 1
+title: Configuration
+---
+
+# Configuration
+
+NexusFlow is configured primarily through environment variables and pipeline JSON.
+
+| Variable | Purpose |
+| --- | --- |
+| `NEXUS_JWT_SECRET` | Signs authentication tokens. |
+| `NEXUS_ENCRYPTION_KEY` | Protects encrypted secrets. |
+| `NEXUS_ADMIN_USERNAME` | Initial administrator username. |
+| `NEXUS_ADMIN_PASSWORD` | Initial administrator password. |
+| `NEXUS_CHECKPOINT_DB` | Pipeline checkpoints and resumability. |
+| `NEXUS_AUTH_DB` | Users and RBAC data. |
+| `NEXUS_PIPELINES_DB` | Pipeline definitions and run history. |
+| `NEXUS_QUEUE_MODE` | Opt-in PostgreSQL worker queue for load distribution. |
+| `NEXUS_MASKING_SALT` | Salt for deterministic PII tokenization. |
+
+SQLite paths are suitable for a single node. Use PostgreSQL URLs for shared metadata, multiple replicas, and coordinated scheduling.
+
+:::tip
+Generate long random values for secrets with `openssl rand -hex 32`, and provide them through a secret manager in production.
+:::

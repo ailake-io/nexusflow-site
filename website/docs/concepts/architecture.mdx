@@ -1,0 +1,22 @@
+---
+sidebar_position: 1
+title: Architecture
+---
+
+# Architecture
+
+NexusFlow is built around Apache Arrow and a Rust execution core. Data enters through source connectors, may be materialized for transformation, and leaves through one or more sinks.
+
+## Main layers
+
+1. **Web application** — React Flow canvas, pipeline editor, run history, and operational views.
+2. **API and control plane** — REST, WebSocket progress, authentication, RBAC, scheduling, and metadata.
+3. **Pipeline engine** — connector routing, backpressure, partitioning, checkpointing, and retries.
+4. **Connectors** — native ADBC/Arrow paths plus adapters for SQL, NoSQL, SaaS, files, queues, and vector systems.
+5. **Storage** — SQLite for a simple single-node setup or PostgreSQL for shared metadata and multiple replicas.
+
+## Execution model
+
+Passthrough pipelines stream compatible data between connectors. A transform or embedding step can materialize a dataset so SQL, chunking, enrichment, or vectorization can run consistently. Checkpoints make partitioned and CDC workloads resumable after interruption.
+
+The default distribution is a single binary/container: API, WebSocket, and embedded UI run together.

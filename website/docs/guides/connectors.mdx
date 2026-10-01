@@ -1,0 +1,19 @@
+---
+sidebar_position: 1
+title: Connectors
+---
+
+# Connectors
+
+NexusFlow exposes a common source/sink model while preserving connector-specific capabilities. The community edition includes connectors for SQL databases, warehouses, files, streaming systems, REST/SaaS services, and vector/search stores.
+
+## Selecting a connector
+
+- Use an **ADBC or Arrow fast path** when available for native columnar transfers.
+- Use a **bridging connector** when the system requires a client SDK or explicit schema.
+- Use **CDC connectors** when the source supports incremental change capture.
+- Use a **vector sink** with chunking and embeddings for AI Lakehouse or RAG workloads.
+
+Keep credentials in environment variables or the secrets mechanism, not in committed pipeline JSON. Set a stable `primary_key` for incremental SQL reads and upserts. For bridging connectors, define `fields` explicitly with names, data types, and nullability.
+
+The complete field reference is maintained in the [full user guide](https://github.com/ailake-io/nexusflow/blob/main/docs/USER_GUIDE.md).

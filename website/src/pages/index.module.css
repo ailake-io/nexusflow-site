@@ -1,0 +1,88 @@
+/**
+ * CSS files with the .module.css suffix will be treated as CSS modules
+ * and scoped locally.
+ */
+
+.heroBanner {
+  padding: 6rem 0;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  background: radial-gradient(circle at 50% -20%, rgba(98, 211, 237, 0.2), transparent 48%), #0b111b;
+  color: #f4fbff;
+}
+
+@media screen and (max-width: 996px) {
+  .heroBanner {
+    padding: 2rem;
+  }
+}
+
+.buttons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.eyebrow {
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  opacity: 0.85;
+}
+
+.intro {
+  padding: 4rem 0;
+}
+
+.intro h2 {
+  font-size: 1.35rem;
+}
+
+.quickstart {
+  padding: 4rem 0;
+  background: var(--ifm-color-emphasis-100);
+}
+
+.quickstart h2 {
+  letter-spacing: -0.03em;
+}
+
+.quickstart pre {
+  margin: 0;
+}
+
+.creator {
+  padding: 4rem 0 5rem;
+}
+
+.creator-card {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 1.5rem;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 1rem;
+  background: var(--ifm-background-surface-color);
+}
+
+.creator-card img {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+}
+
+.creator-card h2,
+.creator-card p {
+  margin-bottom: 0.5rem;
+}
+
+@media screen and (max-width: 600px) {
+  .creator-card {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
