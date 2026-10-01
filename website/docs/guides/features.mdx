@@ -1,0 +1,65 @@
+---
+sidebar_position: 3
+title: Platform features
+---
+
+# Platform features
+
+This page summarizes capabilities that are implemented in the project beyond a basic source-to-sink copy.
+
+## SQL transformations
+
+The `transform` node runs one Apache DataFusion query over named sources. Use `name` on a source to choose its SQL table name; otherwise the engine uses `source0`, `source1`, and so on. The result fans out to all sinks. A transform materializes the input, so size memory for the full working dataset.
+
+```json
+{
+  "sources": [
+    {"name": "events", "connector": "postgres", "config": {}},
+    {"name": "regions", "connector": "postgres", "config": {}}
+  ],
+  "transform": {"sql": "SELECT e.*, r.name FROM events e JOIN regions r ON e.region_id = r.id"},
+  "sinks": [{"connector": "duckdb", "config": {}}]
+}
+```
+
+## No-code cleaning blocks
+
+The UI offers cleaning blocks for filtering, selecting columns, renaming, casting, trimming, replacement, null handling, deduplication, casing, calculated columns, sorting, and aggregation. Blocks compile to one SQL/CTE chain and normally require one source. An aggregation changes row cardinality and is not compatible with a CDC stream that needs to preserve `__opcode`.
+
+For `source → clean blocks → embedding`, use two pipelines connected by `depends_on`: the current engine runs embedding before SQL/clean transformations.
+
+## Embeddings and RAG
+
+The optional `embedding` stage chunks a source column and adds a vector column. It supports local ONNX models and OpenAI-compatible APIs such as OpenAI, vLLM, text-embeddings-inference, LM Studio, and Ollama's `/v1/embeddings` endpoint. Pin an ONNX model revision for reproducibility.
+
+Vector sinks include LanceDB, Qdrant, Milvus, pgvector, Pinecone, and ChromaDB. A saved vector pipeline can be queried through `POST /rag/query` and the RAG UI.
+
+## dbt
+
+The optional `dbt` stage runs after raw sinks. Use `dbt.output` plus `post_dbt_sinks` when the result must be read back and delivered to another destination in the same run. The Docker image includes the dbt runtime used by the project; custom source builds must provide the CLI and `DBT_PROFILES_DIR`.
+
+## Scheduling and orchestration
+
+`schedule` accepts five-field Unix cron or six-field Quartz cron. The scheduler polls every 30 seconds and records scheduled runs in the same history as manual runs.
+
+`depends_on` creates cross-pipeline orchestration. `dependency_mode: "any"` runs after any upstream succeeds; `"all"` waits for all upstreams. Cycles are rejected.
+
+## Catalog, PII, and anomaly detection
+
+- The catalog indexes datasets after successful runs and supports descriptions, owners, tags, and manual column-level PII flags.
+- `masking` applies deterministic HMAC-SHA256 tokenization before SQL and sinks. Set `NEXUS_MASKING_SALT`; the original value is not recoverable from the token.
+- `anomaly_alerts: true` compares run volume against historical mean and standard deviation and sends alerts through the configured channels after enough history exists.
+
+## Agents and visualization
+
+Agents can query data, search vectors, run pipelines, call webhooks, generate charts, draft pipelines, inspect status, and edit existing pipelines. Configure approval for tools that create, edit, run, or call external systems. Visualization runs Python with matplotlib, seaborn, or plotly after a materialized transformation stage.
+
+## Observability
+
+- `GET /health` — unauthenticated liveness.
+- `GET /metrics` — Prometheus metrics; protect it with network controls.
+- WebSocket progress — batches, rows, bytes, partition state, and hardware stats.
+- JSON logs on stdout.
+- `NEXUS_OTLP_ENDPOINT` — OTLP/HTTP trace export.
+- Slack, Teams, PagerDuty, email, and generic webhook alerts.
+- `GET /audit-log` — administrator audit trail with pagination.

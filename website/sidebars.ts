@@ -28,12 +28,17 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Guides',
-      items: ['guides/connectors', 'guides/docker'],
+      items: ['guides/connectors', 'guides/pipelines', 'guides/features', 'guides/docker'],
+    },
+    {
+      type: 'category',
+      label: 'Deployments',
+      items: ['deployments/kubernetes', 'deployments/swarm'],
     },
     {
       type: 'category',
       label: 'Reference',
-      items: ['reference/configuration'],
+      items: ['reference/configuration', 'reference/connector-catalog', 'reference/validation'],
     },
     {
       type: 'category',

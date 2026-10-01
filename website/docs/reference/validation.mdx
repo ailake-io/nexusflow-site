@@ -1,0 +1,44 @@
+---
+sidebar_position: 3
+title: Validation status
+---
+
+# Validation status
+
+This page separates what the project has actually exercised from what is only a reference configuration. It is intentionally conservative so installation expectations are clear.
+
+## Published release artifacts
+
+The stable release currently documented is [v0.3.1](https://github.com/ailake-io/nexusflow/releases/tag/v0.3.1). Its published assets include:
+
+- Linux `.tar.gz`, `.deb`, `.rpm`, and AppImage.
+- Windows x86_64 `.msi`.
+- macOS Apple Silicon `arm64` tarball.
+- `SHA256SUMS` for release verification.
+
+The public Docker image is published as [`thiagolange/nexusflow`](https://hub.docker.com/r/thiagolange/nexusflow). Use release tags rather than `latest` when reproducibility matters.
+
+## Platform status
+
+| Area | Status | Interpretation |
+| --- | --- | --- |
+| Linux binary and packages | Validated in CI and project environments | Primary production path. |
+| Docker image | Published and used by the release workflow | Validate your required native connector libraries. |
+| Windows MSI | Built in hosted Windows CI and installed on a real Windows machine | `winget` remains a separate pending distribution path. |
+| macOS Apple Silicon | Built end-to-end on a real hosted macOS runner | A physical user-machine installation is still a separate validation step. |
+| Kubernetes | Reference manifests exercised with minikube and metrics-server | Managed EKS/GKE/AKS specifics require environment validation. |
+| Docker Swarm | Compose configuration checked offline | Test rolling updates, secrets, storage, and multi-node recovery in your Swarm. |
+| GPU embeddings | Feature paths exist | Physical GPU execution is not a completed project validation. |
+| Intel macOS | Not published | Current macOS artifact is Apple Silicon `arm64`. |
+
+## What to verify before production
+
+1. Pin the image or release asset version.
+2. Run a smoke pipeline for every connector family you will use.
+3. Verify the native driver path and operating-system packages in the target image.
+4. Test restart and checkpoint recovery with representative data.
+5. Test PostgreSQL failover and backups if using replicas.
+6. Test scaling down with active runs before enabling HPA or Swarm rescheduling.
+7. Protect `/metrics`, logs, admin credentials, and connector secrets.
+
+The main repository's [getting started guide](https://github.com/ailake-io/nexusflow/blob/main/docs/GETTING_STARTED.md) and [architecture notes](https://github.com/ailake-io/nexusflow/blob/main/ARCHITECTURE.md) are the source of truth for implementation limitations.

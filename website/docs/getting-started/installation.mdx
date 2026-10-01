@@ -1,13 +1,40 @@
 ---
 sidebar_position: 1
-title: Installation
+title: Installation matrix
 ---
 
-# Installation
+# Installation matrix
 
-NexusFlow can run as a published Docker image, a release binary, or a local Rust build. Docker is the recommended way to evaluate the platform.
+NexusFlow is distributed as one server process that exposes the web UI, REST API, WebSocket progress, and health endpoints on port `8080`. Choose the path that matches your environment:
 
-## Docker
+| Path | Best for | Status and notes |
+| --- | --- | --- |
+| Docker Hub image | Fastest evaluation and Linux production | Published image: `thiagolange/nexusflow`. |
+| Docker Compose | Repeatable single-node deployments | Use a persistent volume; use PostgreSQL for replicas. |
+| Linux installer script | A native Linux binary without building Rust | Installs the latest published release and ADBC drivers. |
+| `.deb`, `.rpm`, AppImage | Linux packaging and desktop/server automation | Assets are attached to each GitHub release. |
+| Windows MSI | Native Windows installation | Built by the release workflow; `winget` is not yet the primary path. |
+| Homebrew / macOS archive | Apple Silicon Macs | The supported artifact is `arm64`; Intel macOS is not published. |
+| Kubernetes | Multi-replica deployments | Reference kustomize manifests; shared PostgreSQL is required. |
+| Docker Swarm | Small clustered deployments | Reference stack; shared PostgreSQL is required. |
+| Build from source | Development or custom Cargo features | Requires frontend build, Rust, and native dependencies for selected connectors. |
+
+The latest stable release currently published by the project is [v0.3.1](https://github.com/ailake-io/nexusflow/releases/tag/v0.3.1). For automation, always resolve the newest release from the [Releases page](https://github.com/ailake-io/nexusflow/releases) instead of hard-coding this version.
+
+## Requirements and sizing
+
+These are engineering starting points, not formal benchmarks:
+
+| Profile | CPU | RAM | Storage | Metadata |
+| --- | --- | --- | --- | --- |
+| Local evaluation | 2 cores | 2 GB | 1 GB free | SQLite |
+| Production baseline | 4–8 cores | 8–16 GB | SSD, 20 GB+ free | PostgreSQL recommended |
+
+The process is lightweight when idle, but transformations and embeddings materialize data in memory. Size RAM for the largest dataset handled by a `transform`, `embedding`, Python, or visualization stage, not only for the binary. CDC workloads keep a replication/change-stream connection open. A GPU is optional and is not required for ordinary pipelines.
+
+## Option A — published Docker image
+
+The image already links the full published connector bundle. Create the volume first because the container runs as UID `1001`, not as root:
 
 ```bash
 docker volume create nexusflow_data
@@ -17,29 +44,169 @@ docker run -d --name nexusflow -p 8080:8080 \
   -e NEXUS_JWT_SECRET="$(openssl rand -hex 32)" \
   -e NEXUS_ENCRYPTION_KEY="$(openssl rand -hex 32)" \
   -e NEXUS_ADMIN_USERNAME=admin \
-  -e NEXUS_ADMIN_PASSWORD=change-this-password \
-  -e NEXUS_CHECKPOINT_DB=sqlite:///data/nexusflow.db \
-  -e NEXUS_AUTH_DB=sqlite:///data/nexusflow-auth.db \
-  -e NEXUS_PIPELINES_DB=sqlite:///data/nexusflow-pipelines.db \
+  -e NEXUS_ADMIN_PASSWORD='change-this-password' \
+  -e NEXUS_CHECKPOINT_DB='sqlite:///data/nexusflow.db' \
+  -e NEXUS_AUTH_DB='sqlite:///data/nexusflow-auth.db' \
+  -e NEXUS_PIPELINES_DB='sqlite:///data/nexusflow-pipelines.db' \
   -v nexusflow_data:/data \
   thiagolange/nexusflow:latest
 ```
 
-Open [http://localhost:8080](http://localhost:8080) and sign in with the administrator credentials.
+Open [http://localhost:8080](http://localhost:8080). The three metadata URLs can point to the same PostgreSQL database in production; their tables are namespaced and do not collide.
 
 :::warning
-Change the administrator password and keep the JWT and encryption secrets private. The volume ownership step is required because the container runs as a non-root user.
+Do not use the example password or commit the generated secrets. Without the volume ownership step the process can fail with `unable to open database file`.
 :::
 
-## Release binaries
+### Local Docker build
 
-Linux installers, Windows MSI packages, and the macOS Apple Silicon archive are published on the [GitHub Releases page](https://github.com/ailake-io/nexusflow/releases).
-
-## Build from source
-
-For development, install Rust and run:
+The Dockerfile can build a smaller default image or a full connector image:
 
 ```bash
-cargo build --release -p nexusflow --features embed-ui,connectors-all
+docker build -t nexusflow:local .
+docker build --build-arg FEATURES=embed-ui,connectors-all -t nexusflow:full .
+```
+
+The published image is the validated distribution path. A local full Docker build may need additional runtime packages for specific connectors, for example `zlib1g` for Kafka/librdkafka.
+
+### Optional CUDA base
+
+The project includes CUDA/Metal feature paths for ONNX execution, but GPU execution has not been validated on physical hardware in this project. Treat this as experimental:
+
+```bash
+docker build --build-arg RUNTIME_IMAGE=nvidia/cuda:12.4.1-runtime-ubuntu22.04 -t nexusflow:cuda .
+docker run --gpus all -d -p 8080:8080 \
+  -e NEXUS_JWT_SECRET='...' -e NEXUS_ENCRYPTION_KEY='...' \
+  -e NEXUS_CHECKPOINT_DB='sqlite:///data/nexusflow.db' \
+  -e NEXUS_AUTH_DB='sqlite:///data/nexusflow-auth.db' \
+  -e NEXUS_PIPELINES_DB='sqlite:///data/nexusflow-pipelines.db' \
+  -v nexusflow_data:/data nexusflow:cuda
+```
+
+## Option B — Docker Compose
+
+Use Compose when the environment should be reproducible and restartable:
+
+```yaml
+services:
+  nexusflow:
+    image: thiagolange/nexusflow:latest
+    ports:
+      - "8080:8080"
+    environment:
+      NEXUS_JWT_SECRET: ${NEXUS_JWT_SECRET}
+      NEXUS_ENCRYPTION_KEY: ${NEXUS_ENCRYPTION_KEY}
+      NEXUS_ADMIN_USERNAME: admin
+      NEXUS_ADMIN_PASSWORD: ${NEXUS_ADMIN_PASSWORD}
+      NEXUS_CHECKPOINT_DB: sqlite:///data/nexusflow.db
+      NEXUS_AUTH_DB: sqlite:///data/nexusflow-auth.db
+      NEXUS_PIPELINES_DB: sqlite:///data/nexusflow-pipelines.db
+    volumes:
+      - nexusflow_data:/data
+    restart: unless-stopped
+
+volumes:
+  nexusflow_data:
+```
+
+Create an uncommitted `.env`, initialize ownership once, then run `docker compose up -d`. For more than one replica, use PostgreSQL for all three metadata databases; SQLite is single-node only.
+
+## Option C — Linux install script
+
+The script downloads the release binary and ADBC drivers into `~/.local/share/nexusflow` and places the executable in `~/.local/bin`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ailake-io/nexusflow/main/scripts/install.sh | sh
+export PATH="$HOME/.local/bin:$PATH"
+nexusflow --version
+```
+
+The release binary is built with the full connector bundle. Some connectors still need operating-system libraries: `unixodbc` for ODBC and `libsasl2` for Kafka. Inspect the installer output before using those connectors.
+
+## Option D — Linux packages
+
+Release assets include `.deb`, `.rpm`, and AppImage packages. The project also contains scripts for building them locally:
+
+```bash
+./scripts/package-deb.sh
+./scripts/package-rpm.sh
+./scripts/package-appimage.sh
+```
+
+The `.deb` declares the main ODBC/Kafka runtime dependencies; AppImage and RPM still require the relevant system libraries on the target. Download the published assets from [Releases](https://github.com/ailake-io/nexusflow/releases) and verify `SHA256SUMS` when distributing internally.
+
+## Option E — Windows
+
+Download `nexusflow-<version>-x86_64.msi` from the release assets and install it with Windows Installer. The MSI is produced by `build-windows-installer.yml` on a hosted Windows runner and has been installed successfully on a real Windows machine in the project validation history.
+
+The `winget` manifest is maintained separately in `microsoft/winget-pkgs` and requires acceptance of the upstream PR before `winget install Ailake.NexusFlow` becomes a supported end-user path. Do not document `winget` as the primary install method until that PR is accepted.
+
+## Option F — macOS Apple Silicon
+
+Only `arm64` is currently published. The recommended Homebrew formula is maintained in the public tap:
+
+```bash
+brew install ailake-io/nexusflow/nexusflow
+nexusflow --version
+```
+
+The alternative formula in the main repository is:
+
+```bash
+brew install --formula https://raw.githubusercontent.com/ailake-io/nexusflow/main/packaging/macos/nexusflow.rb
+```
+
+The release archive is `nexusflow-macos-arm64.tar.gz`. Intel macOS (`x86_64`) is not a published artifact.
+
+## Option G — build from source
+
+For a complete local build with the embedded UI and standard connectors:
+
+```bash
+npm --prefix frontend ci
+npm --prefix frontend run build
+cargo build --release -p nexusflow --features embed-ui
+
+./scripts/build-adbc-postgresql-driver.sh
+./scripts/build-adbc-sqlite-driver.sh
+
+export ADBC_DRIVER_POSTGRESQL_PATH="$(pwd)/target/adbc/libadbc_driver_postgresql.so"
+export ADBC_DRIVER_SQLITE_PATH="$(pwd)/target/adbc/libadbc_driver_sqlite.so"
+export NEXUS_JWT_SECRET="$(openssl rand -hex 32)"
+export NEXUS_ENCRYPTION_KEY="$(openssl rand -hex 32)"
+export NEXUS_ADMIN_USERNAME=admin
+export NEXUS_ADMIN_PASSWORD='change-this-password'
+
 ./target/release/nexusflow
 ```
+
+The frontend build must run before Cargo because `embed-ui` embeds `frontend/dist` at compile time. On macOS, the ADBC paths use `.dylib` rather than `.so`.
+
+### Source features
+
+Without feature flags, the source build includes the base PostgreSQL and SQLite paths. Add one connector or the complete bundle:
+
+```bash
+cargo build --release -p nexusflow --features embed-ui,pgvector
+cargo build --release -p nexusflow --features embed-ui,connectors-all
+```
+
+`kafka` and `odbc` need native libraries; `milvus` and `lancedb` need `protoc`. The `pdf-ocr` feature is intentionally outside `connectors-all` and must be enabled explicitly. The `/connectors` endpoint always shows exactly what the binary contains.
+
+## Option H — Kubernetes and Swarm
+
+These are deployment options rather than local installers:
+
+- [Kubernetes deployment](../deployments/kubernetes)
+- [Docker Swarm deployment](../deployments/swarm)
+
+Both require PostgreSQL when more than one replica is used. The reference manifests do not provision PostgreSQL, TLS, Ingress, or a cloud load balancer for you.
+
+## Post-install checklist
+
+1. Confirm `GET /health` or open the UI on port `8080`.
+2. Confirm the administrator can log in.
+3. Check `GET /connectors` to verify the expected connector features are present.
+4. Keep metadata on persistent storage.
+5. Run a small source-to-sink pipeline before importing production workloads.
+6. Configure Prometheus, logs, alerts, and backups before scaling out.

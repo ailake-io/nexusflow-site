@@ -1,0 +1,101 @@
+---
+sidebar_position: 2
+title: Pipelines and API
+---
+
+# Pipelines and API
+
+## Pipeline shape
+
+```text
+source(s) -> transform or clean blocks (optional) -> sink(s)
+```
+
+Without a transform, the pipeline is exactly one source to one sink. With SQL transform, the engine supports multiple sources and multiple sinks, but materializes the input for DataFusion. CDC streams must preserve `__opcode` through transformations.
+
+The core `PipelineSpec` fields are:
+
+| Field | Meaning |
+| --- | --- |
+| `pipeline_id` | Unique identifier. |
+| `sources` | One or more source nodes. |
+| `transform` | Optional DataFusion SQL. |
+| `clean_blocks` | Optional no-code transformation chain. |
+| `sinks` | One or more destination nodes. |
+| `embedding` | Optional chunking and vectorization stage. |
+| `dbt` / `post_dbt_sinks` | Optional ELT or ETL follow-up. |
+| `partitions` / `channel_capacity` | Parallelism and backpressure controls. |
+| `schedule` | Optional five-field Unix or six-field Quartz cron. |
+| `depends_on` | Optional cross-pipeline orchestration. |
+| `masking` | Optional deterministic PII tokenization. |
+| `anomaly_alerts` | Optional volume anomaly detection. |
+
+## Authentication and RBAC
+
+```bash
+TOKEN=$(curl -s -X POST http://localhost:8080/auth/login \
+  -H 'content-type: application/json' \
+  -d '{"username":"admin","password":"change-this-password"}' | jq -r .token)
+```
+
+Roles are hierarchical:
+
+| Role | Permissions |
+| --- | --- |
+| `Read` | Catalog, pipeline list, status, and run history. |
+| `Execute` | Read plus run and preview. |
+| `Write` | Execute plus create, edit, delete, and read full specs. |
+| `Admin` | Write plus user and role management and audit access. |
+
+## Create and run
+
+```bash
+curl -s -X POST http://localhost:8080/pipelines \
+  -H "authorization: Bearer $TOKEN" \
+  -H 'content-type: application/json' \
+  -d '{
+    "pipeline_id": "pg-to-sqlite",
+    "sources": [{"connector": "postgres", "config": {"uri": "postgres://user:password@host/db", "table": "events", "primary_key": "id"}}],
+    "sinks": [{"connector": "sqlite", "config": {"uri": "/data/output.db", "table": "events", "primary_key": "id"}}]
+  }'
+
+curl -s -X POST http://localhost:8080/pipelines/pg-to-sqlite/run \
+  -H "authorization: Bearer $TOKEN" \
+  -H 'content-type: application/json' \
+  -d '{"pipeline_id":"pg-to-sqlite"}'
+```
+
+The run endpoint returns `202 Accepted` and a `run_id`; execution continues in the background. Use the history and logs endpoints:
+
+```bash
+curl -s http://localhost:8080/pipelines/pg-to-sqlite/runs -H "authorization: Bearer $TOKEN"
+curl -s http://localhost:8080/pipelines/pg-to-sqlite/runs/1/logs -H "authorization: Bearer $TOKEN"
+curl -s "http://localhost:8080/pipelines/pg-to-sqlite/preview?node=source0&limit=20" \
+  -H "authorization: Bearer $TOKEN"
+```
+
+The WebSocket `/pipelines/{id}/runs/{run_id}/progress` streams batches, rows, bytes, partition status, and periodic hardware statistics.
+
+## Scheduling and dependencies
+
+```json
+{
+  "pipeline_id": "aggregate-daily",
+  "schedule": "0 2 * * *",
+  "depends_on": [{"upstream_pipeline_id": "load-daily"}],
+  "dependency_mode": "all"
+}
+```
+
+The scheduler polls every 30 seconds. `any` starts after one successful upstream; `all` waits for every upstream in the same cycle. Cyclic dependency graphs are rejected when saved.
+
+## API discovery
+
+```bash
+curl -s http://localhost:8080/health
+curl -s http://localhost:8080/connectors -H "authorization: Bearer $TOKEN"
+curl -s http://localhost:8080/catalog/datasets -H "authorization: Bearer $TOKEN"
+curl -s http://localhost:8080/orchestration/graph -H "authorization: Bearer $TOKEN"
+```
+
+The connector catalog is dynamic: it reflects the features compiled into the running binary.

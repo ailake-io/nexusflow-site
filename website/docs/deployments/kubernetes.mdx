@@ -1,0 +1,66 @@
+---
+sidebar_position: 1
+title: Kubernetes
+---
+
+# Kubernetes deployment
+
+The repository contains reference kustomize manifests in [`packaging/kubernetes`](https://github.com/ailake-io/nexusflow/tree/main/packaging/kubernetes). They are not a Helm chart and do not provision PostgreSQL, Ingress, TLS, or a cloud load balancer.
+
+## Requirements
+
+- A Kubernetes cluster with `kubectl` and kustomize support.
+- A PostgreSQL database reachable by every NexusFlow pod when using more than one replica.
+- A registry image tag. Pin a release tag in production; do not use `latest`.
+- A secret manager, Sealed Secrets, External Secrets Operator, or Vault for credentials.
+
+SQLite is appropriate only for one pod. Never mount one SQLite database as `ReadWriteMany` for multiple replicas. PostgreSQL enables shared metadata, leader election for schedules, and safe horizontal API scaling.
+
+## Create the secret
+
+Generate real values outside the repository:
+
+```bash
+kubectl create secret generic nexusflow-secrets \
+  --from-literal=NEXUS_JWT_SECRET="$(openssl rand -hex 32)" \
+  --from-literal=NEXUS_ENCRYPTION_KEY="$(openssl rand -hex 32)" \
+  --from-literal=NEXUS_ADMIN_USERNAME=admin \
+  --from-literal=NEXUS_ADMIN_PASSWORD='change-this-password' \
+  --from-literal=NEXUS_CHECKPOINT_DB='postgres://user:password@postgres:5432/nexusflow' \
+  --from-literal=NEXUS_AUTH_DB='postgres://user:password@postgres:5432/nexusflow' \
+  --from-literal=NEXUS_PIPELINES_DB='postgres://user:password@postgres:5432/nexusflow'
+```
+
+Review the generated `secret.yaml` and `configmap.yaml` in the source repository before applying. Prefer an external secret system rather than committing literal values.
+
+## Pin the image and apply
+
+```bash
+cd packaging/kubernetes
+kustomize edit set image thiagolange/nexusflow=thiagolange/nexusflow:v0.3.1
+kubectl apply -k .
+kubectl get pods -l app=nexusflow
+kubectl port-forward svc/nexusflow 8080:8080
+```
+
+Use an Ingress or LoadBalancer from your platform to expose the service. Configure TLS at that layer.
+
+## Storage and scaling
+
+The PVC is used for model/cache data. If it is removed, the cache can use `emptyDir`, but it will not survive rescheduling to another node. HPA is included as a reference; scaling down can terminate an in-flight run. The run is marked failed on restart and can resume from the latest checkpoint, but this is not a zero-disruption handoff.
+
+The reference manifests were validated with minikube and metrics-server in the project history. Validate resource requests, storage class, ingress, network policy, backups, and PostgreSQL high availability in the target cluster before production.
+
+## Migrating an existing SQLite deployment
+
+Use the `migrate-metadata` binary with the same `NEXUS_ENCRYPTION_KEY` used by the source deployment. It copies users, pipelines, run history, and checkpoints while preserving IDs:
+
+```bash
+cargo run --release -p nexus-server --bin migrate-metadata --features postgres -- \
+  --auth-sqlite sqlite://nexusflow-auth.db \
+  --auth-postgres postgres://user:password@host/db \
+  --pipelines-sqlite sqlite://nexusflow-pipelines.db \
+  --pipelines-postgres postgres://user:password@host/db \
+  --checkpoint-sqlite sqlite://nexusflow.db \
+  --checkpoint-postgres postgres://user:password@host/db
+```

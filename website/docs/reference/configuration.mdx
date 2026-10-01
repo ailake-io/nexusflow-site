@@ -3,24 +3,79 @@ sidebar_position: 1
 title: Configuration
 ---
 
-# Configuration
+# Configuration reference
 
-NexusFlow is configured primarily through environment variables and pipeline JSON.
+NexusFlow reads environment variables at startup and pipeline JSON when a pipeline is created or updated. The server fails fast when the required cryptographic secrets are missing.
 
-| Variable | Purpose |
-| --- | --- |
-| `NEXUS_JWT_SECRET` | Signs authentication tokens. |
-| `NEXUS_ENCRYPTION_KEY` | Protects encrypted secrets. |
-| `NEXUS_ADMIN_USERNAME` | Initial administrator username. |
-| `NEXUS_ADMIN_PASSWORD` | Initial administrator password. |
-| `NEXUS_CHECKPOINT_DB` | Pipeline checkpoints and resumability. |
-| `NEXUS_AUTH_DB` | Users and RBAC data. |
-| `NEXUS_PIPELINES_DB` | Pipeline definitions and run history. |
-| `NEXUS_QUEUE_MODE` | Opt-in PostgreSQL worker queue for load distribution. |
-| `NEXUS_MASKING_SALT` | Salt for deterministic PII tokenization. |
+## Required and core variables
 
-SQLite paths are suitable for a single node. Use PostgreSQL URLs for shared metadata, multiple replicas, and coordinated scheduling.
+| Variable | Required | Default | Purpose |
+| --- | --- | --- | --- |
+| `NEXUS_JWT_SECRET` | Yes | — | Signs and validates JWT tokens. |
+| `NEXUS_ENCRYPTION_KEY` | Yes | — | 64 hex characters / 32 bytes for AES-256-GCM encryption of connector secrets. |
+| `NEXUS_ADMIN_USERNAME` | No | — | Creates the initial administrator if the users table is empty. |
+| `NEXUS_ADMIN_PASSWORD` | No | — | Password paired with the bootstrap username. |
+| `NEXUS_CHECKPOINT_DB` | No | `sqlite://nexusflow.db` | Per-partition checkpoints and resumability. Accepts SQLite or PostgreSQL URLs. |
+| `NEXUS_AUTH_DB` | No | `sqlite://nexusflow-auth.db` | Users, password hashes, and roles. |
+| `NEXUS_PIPELINES_DB` | No | `sqlite://nexusflow-pipelines.db` | Pipeline definitions and run history. |
+| `NEXUS_ALLOW_INTERNAL_HOSTS` | No | `false` | Allows connector URLs to target localhost/LAN addresses. Keep false in production to reduce SSRF risk. |
 
-:::tip
-Generate long random values for secrets with `openssl rand -hex 32`, and provide them through a secret manager in production.
-:::
+Generate secrets instead of typing examples:
+
+```bash
+export NEXUS_JWT_SECRET="$(openssl rand -hex 32)"
+export NEXUS_ENCRYPTION_KEY="$(openssl rand -hex 32)"
+```
+
+The administrator bootstrap is idempotent: it runs only when the users table is empty. Changing the environment variables later does not replace an existing administrator.
+
+## Operational variables
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `NEXUS_SLACK_WEBHOOK_URL` | — | Sends pipeline failure and approval alerts to Slack. |
+| `NEXUS_OTLP_ENDPOINT` | — | Exports traces over OTLP/HTTP. |
+| `NEXUS_MASKING_SALT` | — | Required for pipelines using deterministic PII masking. Keep stable for joins/grouping. |
+| `NEXUS_QUEUE_MODE` | `false` | PostgreSQL-only worker queue for distributing runs across replicas. |
+| `NEXUS_DBT_PROJECTS_ROOT` | Process working directory | Base directory for relative `dbt.project_dir` values. |
+| `DBT_PROFILES_DIR` | dbt default | Directory containing dbt `profiles.yml`. |
+| `ADBC_DRIVER_POSTGRESQL_PATH` | — | Native ADBC PostgreSQL driver path (`.so` or `.dylib`). |
+| `ADBC_DRIVER_SQLITE_PATH` | — | Native ADBC SQLite driver path. |
+| `ADBC_DRIVER_DUCKDB_PATH` | — | Native ADBC DuckDB driver path when used. |
+| `ADBC_DRIVER_CLICKHOUSE_PATH` | — | Native ADBC ClickHouse driver path when used. |
+
+Alert integrations for Teams, PagerDuty, email, and generic webhooks use the corresponding connector/server configuration documented in the main repository's [user guide](https://github.com/ailake-io/nexusflow/blob/main/docs/USER_GUIDE.md).
+
+## SQLite versus PostgreSQL
+
+SQLite is the safe default for one node with persistent local storage. PostgreSQL is required for shared metadata, multiple replicas, coordinated schedules, and `NEXUS_QUEUE_MODE=true`.
+
+```bash
+export NEXUS_CHECKPOINT_DB='postgres://user:password@host:5432/nexusflow'
+export NEXUS_AUTH_DB='postgres://user:password@host:5432/nexusflow'
+export NEXUS_PIPELINES_DB='postgres://user:password@host:5432/nexusflow'
+```
+
+All three URLs may point to the same database. With PostgreSQL, scheduler leader election uses an advisory lock so only one replica dispatches a scheduled pipeline per tick.
+
+## Migrating metadata
+
+The migration binary copies users, pipelines, run history, and checkpoints while preserving IDs. It is idempotent and must use the same `NEXUS_ENCRYPTION_KEY` on the destination:
+
+```bash
+cargo run --release -p nexus-server --bin migrate-metadata --features postgres -- \
+  --auth-sqlite sqlite://nexusflow-auth.db \
+  --auth-postgres postgres://user:password@host/db \
+  --pipelines-sqlite sqlite://nexusflow-pipelines.db \
+  --pipelines-postgres postgres://user:password@host/db \
+  --checkpoint-sqlite sqlite://nexusflow.db \
+  --checkpoint-postgres postgres://user:password@host/db
+```
+
+## Security baseline
+
+- Store secrets in a secret manager and never in pipeline JSON or Git.
+- Keep `NEXUS_ALLOW_INTERNAL_HOSTS=false` unless local connector access is explicitly needed.
+- Put `/metrics` behind network controls; it is intentionally unauthenticated for Prometheus scraping.
+- Use PostgreSQL backups for metadata and persistent volumes for local SQLite.
+- Keep the encryption key stable across restarts and migrations; losing it makes stored connector specs unreadable.

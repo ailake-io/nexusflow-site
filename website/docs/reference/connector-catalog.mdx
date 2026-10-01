@@ -1,0 +1,54 @@
+---
+sidebar_position: 2
+title: Connector catalog
+---
+
+# Connector catalog
+
+The catalog below is grouped by capability. Exact fields, defaults, authentication, and source/sink behavior are maintained in the [full connector field reference](https://github.com/ailake-io/nexusflow/blob/main/docs/USER_GUIDE.md).
+
+## SQL, warehouses, and fast paths
+
+PostgreSQL, SQLite, ClickHouse, DuckDB, MySQL, BigQuery, Snowflake, Microsoft SQL Server, Databricks, Redshift, Oracle, SAP HANA, Teradata, Vertica, Starburst, and ODBC.
+
+ADBC drivers are used where supported. PostgreSQL, SQLite, DuckDB, and ClickHouse use driver path variables when the driver is not found automatically. Vendor drivers for Oracle, HANA, Teradata, Vertica, and some ODBC deployments remain the operator's responsibility.
+
+## NoSQL, APIs, and messaging
+
+MongoDB, REST, webhook, Redis Streams, NATS, RabbitMQ, Kafka, MQTT, Kinesis, and Pulsar.
+
+Bridging connectors commonly require an explicit `fields` array with `name`, `data_type`, and `nullable`. Kafka commits offsets after successful batches; do not assume an external auto-commit path.
+
+## Files, lakehouse, and cloud storage
+
+CSV, Parquet, Delta Lake, Apache Iceberg, AI-Lake, Excel, Google Drive, Google Sheets, Dropbox, and SharePoint bridging.
+
+Local path connectors read and write from the server filesystem. In the UI, the browse button selects a server-side path; it does not upload a client file into the server automatically.
+
+## Vector and search sinks
+
+LanceDB, Qdrant, Milvus, pgvector, Pinecone, ChromaDB, Weaviate, Vertex AI, Azure AI Search, and Elasticsearch.
+
+LanceDB and AI-Lake can also be used as sources. Most other vector/search connectors are sink-only in the current implementation, so previewing them as a source is not supported.
+
+## CDC connectors
+
+Native CDC paths include PostgreSQL WAL, MongoDB Change Streams, MySQL binlog, SQL Server Change Tracking, Oracle LogMiner, Delta Lake, Iceberg, and AI-Lake. CDC keeps a persistent source connection and uses checkpoints to resume partitions or offsets.
+
+## Compile-time availability
+
+The published Docker image and release installers use `embed-ui,connectors-all`. A source build can select one feature or the bundle:
+
+```bash
+cargo build --release -p nexusflow --features embed-ui,pgvector
+cargo build --release -p nexusflow --features embed-ui,connectors-all
+```
+
+`pdf-ocr` is outside `connectors-all` and must be enabled explicitly. Check the live result from `GET /connectors`; the UI never advertises an uncompiled connector.
+
+## Important sink behavior
+
+- Iceberg is append-oriented in the current `iceberg-rust` integration; deletes are rejected and duplicate handling depends on the configured key.
+- Parquet rewrites the file for CDC upsert/delete, so cost is proportional to the table size.
+- ClickHouse is append-only; use a ReplacingMergeTree/CollapsingMergeTree design if deduplication is needed.
+- CDC pipelines must preserve `__opcode` through any transformation.

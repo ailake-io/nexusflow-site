@@ -1,0 +1,39 @@
+---
+sidebar_position: 2
+title: Docker Swarm
+---
+
+# Docker Swarm deployment
+
+The source repository contains a reference stack at [`packaging/swarm`](https://github.com/ailake-io/nexusflow/tree/main/packaging/swarm). It has been checked with Compose configuration validation, but it is not a replacement for testing a real multi-node Swarm.
+
+## Requirements
+
+- A Swarm manager and worker nodes.
+- A shared PostgreSQL service outside or inside your platform.
+- A secret manager or CI/CD process that can inject environment variables.
+
+With two or more replicas, all three metadata databases must use PostgreSQL. The stack does not provision PostgreSQL.
+
+## Deploy
+
+The stack currently reads environment substitution from the shell or `.env`; NexusFlow does not consume the Swarm `/run/secrets/<name>` convention automatically:
+
+```bash
+docker swarm init
+
+export NEXUS_JWT_SECRET="$(openssl rand -hex 32)"
+export NEXUS_ENCRYPTION_KEY="$(openssl rand -hex 32)"
+export NEXUS_CHECKPOINT_DB='postgres://user:password@host:5432/nexusflow'
+export NEXUS_AUTH_DB='postgres://user:password@host:5432/nexusflow'
+export NEXUS_PIPELINES_DB='postgres://user:password@host:5432/nexusflow'
+
+docker stack deploy -c packaging/swarm/docker-stack.yml nexusflow
+docker stack services nexusflow
+```
+
+Do not commit the `.env` file. Configure health checks, backups, TLS, network policy, and rolling-update behavior for the target environment.
+
+## Scaling caveat
+
+Scaling down can terminate runs in progress on the removed container. Checkpoints allow recovery, but the run may be marked failed before the next attempt.
